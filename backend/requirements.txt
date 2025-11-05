@@ -1,0 +1,45 @@
+# FastAPI Framework
+fastapi
+uvicorn
+python-multipart
+websockets
+
+# Database
+motor
+pymongo
+
+# Authentication
+firebase-admin
+python-jose
+passlib
+
+# AI/ML Services
+groq
+
+# Computer Vision
+opencv-python
+# mediapipe  # Note: MediaPipe has limited Windows support, install manually if needed
+# deepface  # Requires mediapipe, skip for now
+
+# NLP
+# spacy  # Large dependency, install separately if needed: pip install spacy
+textblob
+
+# Document Processing
+PyPDF2
+pdfplumber
+
+# Audio Processing
+SpeechRecognition
+pydub
+
+# Report Generation
+reportlab
+
+# Utilities
+python-dotenv
+Pillow
+numpy>=2.3.0  # NumPy 2.x has wheels for Python 3.14
+pandas
+pydantic
+email-validator  # Required for pydantic EmailStr validation
