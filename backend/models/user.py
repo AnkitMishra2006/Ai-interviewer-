@@ -1,7 +1,45 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional, Dict, Literal
 from datetime import datetime
 
+
+# Authentication Models
+class UserCreate(BaseModel):
+    """Model for user registration"""
+    email: EmailStr
+    name: str
+    role: Literal["candidate", "recruiter"]
+
+
+class UserLogin(BaseModel):
+    """Model for user login - receives Firebase token"""
+    firebase_token: str
+
+
+class UserResponse(BaseModel):
+    """Model for user response"""
+    id: str
+    email: str
+    name: str
+    role: str
+    firebase_uid: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class UserInDB(BaseModel):
+    """Model for user stored in MongoDB"""
+    email: EmailStr
+    name: str
+    role: Literal["candidate", "recruiter"]
+    firebase_uid: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+# Legacy Models
 class CandidateProfile(BaseModel):
     name: str
     email: str

@@ -1,9 +1,62 @@
+from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 import os
+from config import settings
+
 
 class Database:
+    """MongoDB database manager - Async version"""
+    client: Optional[AsyncIOMotorClient] = None
+    db = None
+
+    @classmethod
+    async def connect_db(cls):
+        """Connect to MongoDB"""
+        try:
+            cls.client = AsyncIOMotorClient(settings.MONGODB_URI)
+            cls.db = cls.client[settings.DATABASE_NAME]
+            # Test connection
+            await cls.client.admin.command('ping')
+            print(f"✅ Connected to MongoDB: {settings.DATABASE_NAME}")
+        except Exception as e:
+            print(f"❌ Failed to connect to MongoDB: {e}")
+            raise
+    
+    @classmethod
+    async def close_db(cls):
+        """Close MongoDB connection"""
+        if cls.client:
+            cls.client.close()
+            print("✅ Disconnected from MongoDB")
+    
+    @classmethod
+    def get_collection(cls, name: str):
+        """Get a MongoDB collection"""
+        if cls.db is None:
+            raise RuntimeError("Database not connected")
+        return cls.db[name]
+
+
+# Helper functions to get collections
+def get_users_collection():
+    """Get users collection"""
+    return Database.get_collection("users")
+
+
+def get_interviews_collection():
+    """Get interviews collection"""
+    return Database.get_collection("interviews")
+
+
+def get_responses_collection():
+    """Get responses collection"""
+    return Database.get_collection("responses")
+
+
+# Legacy sync database class for backward compatibility
+class LegacyDatabase:
     def __init__(self):
         # Use MongoDB connection string from env or default to local
         mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")

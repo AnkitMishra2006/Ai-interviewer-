@@ -5,12 +5,28 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routes import auth_router, candidates_router, interviews_router, recruiters_router
+from utils.database import Database
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    print("🚀 Starting AI Recruiter Pro API...")
+    await Database.connect_db()
+    yield
+    # Shutdown
+    print("🔄 Shutting down AI Recruiter Pro API...")
+    await Database.close_db()
+
 
 # Create FastAPI app
 app = FastAPI(
     title="AI Recruiter Pro API",
     description="Intelligent interview automation platform with cheating detection",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS Configuration

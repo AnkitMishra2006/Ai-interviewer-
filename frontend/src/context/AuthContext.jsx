@@ -6,7 +6,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import api from '../services/api';
@@ -30,8 +32,26 @@ export const AuthProvider = ({ children }) => {
     // Listen to auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // TODO: Fetch user data from backend
-        setUser(firebaseUser);
+        try {
+          // Get Firebase token and send to backend
+          const token = await firebaseUser.getIdToken();
+          
+          // Send token to backend for login/sync
+          const response = await api.post('/auth/login', {
+            firebase_token: token
+          });
+          
+          // Set user data from backend response
+          if (response.data.success) {
+            setUser({
+              ...firebaseUser,
+              ...response.data.data.user
+            });
+          }
+        } catch (error) {
+          console.error('Error syncing with backend:', error);
+          setUser(firebaseUser); // Fallback to Firebase user
+        }
       } else {
         setUser(null);
       }
@@ -44,33 +64,105 @@ export const AuthProvider = ({ children }) => {
   const signup = async (email, password, role, name) => {
     try {
       setError(null);
-      // TODO: Implement signup with backend
+      
+      // First, register user in backend
+      await api.post('/auth/register', {
+        email,
+        name,
+        role
+      });
+      
+      // Then create Firebase user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Get token and login to backend
+      const token = await userCredential.user.getIdToken();
+      const response = await api.post('/auth/login', {
+        firebase_token: token
+      });
+      
+      if (response.data.success) {
+        setUser({
+          ...userCredential.user,
+          ...response.data.data.user
+        });
+      }
+      
       return userCredential.user;
     } catch (err) {
-      setError(err.message);
-      throw err;
+      setError(err.response?.data?.detail || err.message);
+      throw new Error(err.response?.data?.detail || err.message);
     }
   };
 
   const login = async (email, password) => {
     try {
       setError(null);
+      
+      // Sign in with Firebase
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Get token and send to backend
+      const token = await userCredential.user.getIdToken();
+      const response = await api.post('/auth/login', {
+        firebase_token: token
+      });
+      
+      if (response.data.success) {
+        setUser({
+          ...userCredential.user,
+          ...response.data.data.user
+        });
+      }
+      
       return userCredential.user;
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+      throw new Error(err.response?.data?.detail || err.message);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      // Logout from backend (optional)
+      try {
+        await api.post('/auth/logout');
+      } catch (error) {
+        console.error('Backend logout error:', error);
+      }
+      
+      // Logout from Firebase
+      await signOut(auth);
+      setUser(null);
     } catch (err) {
       setError(err.message);
       throw err;
     }
   };
 
-  const logout = async () => {
+  const loginWithGoogle = async () => {
     try {
-      await signOut(auth);
-      setUser(null);
+      setError(null);
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      
+      // Get token and send to backend (backend will create user if not exists)
+      const token = await userCredential.user.getIdToken();
+      const response = await api.post('/auth/login', {
+        firebase_token: token
+      });
+      
+      if (response.data.success) {
+        setUser({
+          ...userCredential.user,
+          ...response.data.data.user
+        });
+      }
+      
+      return userCredential.user;
     } catch (err) {
-      setError(err.message);
-      throw err;
+      setError(err.response?.data?.detail || err.message);
+      throw new Error(err.response?.data?.detail || err.message);
     }
   };
 
@@ -81,6 +173,7 @@ export const AuthProvider = ({ children }) => {
     signup,
     login,
     logout,
+    loginWithGoogle,
   };
 
   return (

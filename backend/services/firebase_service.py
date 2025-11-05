@@ -33,8 +33,11 @@ class FirebaseService:
         Returns:
             Decoded token with user info
         """
-        # TODO: Implement token verification
-        pass
+        try:
+            decoded_token = auth.verify_id_token(token)
+            return decoded_token
+        except Exception as e:
+            raise ValueError(f"Invalid token: {str(e)}")
     
     def create_user(self, email: str, password: str, display_name: str = None):
         """
@@ -48,8 +51,15 @@ class FirebaseService:
         Returns:
             User record
         """
-        # TODO: Implement user creation
-        pass
+        try:
+            user = auth.create_user(
+                email=email,
+                password=password,
+                display_name=display_name
+            )
+            return user
+        except Exception as e:
+            raise ValueError(f"Failed to create user: {str(e)}")
     
     def get_user_by_email(self, email: str):
         """
@@ -61,8 +71,31 @@ class FirebaseService:
         Returns:
             User record or None
         """
-        # TODO: Implement get user by email
-        pass
+        try:
+            user = auth.get_user_by_email(email)
+            return user
+        except auth.UserNotFoundError:
+            return None
+        except Exception as e:
+            raise ValueError(f"Failed to get user: {str(e)}")
+    
+    def get_user_by_uid(self, uid: str):
+        """
+        Get user by Firebase UID
+        
+        Args:
+            uid: Firebase user ID
+            
+        Returns:
+            User record or None
+        """
+        try:
+            user = auth.get_user(uid)
+            return user
+        except auth.UserNotFoundError:
+            return None
+        except Exception as e:
+            raise ValueError(f"Failed to get user: {str(e)}")
     
     def delete_user(self, uid: str):
         """
@@ -71,8 +104,10 @@ class FirebaseService:
         Args:
             uid: Firebase user ID
         """
-        # TODO: Implement user deletion
-        pass
+        try:
+            auth.delete_user(uid)
+        except Exception as e:
+            raise ValueError(f"Failed to delete user: {str(e)}")
 
 
 # Singleton instance
