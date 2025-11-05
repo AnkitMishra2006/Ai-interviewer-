@@ -7,6 +7,19 @@ echo AI Recruiter Pro - Dev Environment
 echo ========================================
 echo.
 
+REM Kill processes on ports 8000 and 5173
+echo Checking and cleaning ports...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do (
+    echo Killing process on port 8000 (PID: %%a)...
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') do (
+    echo Killing process on port 5173 (PID: %%a)...
+    taskkill /F /PID %%a >nul 2>&1
+)
+echo Ports are now available
+echo.
+
 REM Check if backend virtual environment exists
 if not exist "backend\venv" (
     echo Creating backend virtual environment...

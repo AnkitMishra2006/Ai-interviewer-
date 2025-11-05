@@ -6,14 +6,20 @@ AI-Powered Interview Platform with real-time monitoring, automated screening, an
 
 ### Option 1: One-Click Start (Recommended)
 
-**For PowerShell (Windows 10/11):**
+**For Windows (PowerShell):**
 ```powershell
 .\start-dev.ps1
 ```
 
-**For Command Prompt:**
+**For Windows (Command Prompt):**
 ```cmd
 start-dev.bat
+```
+
+**For Mac/Linux:**
+```bash
+chmod +x start-dev.sh
+./start-dev.sh
 ```
 
 This will automatically:
@@ -21,18 +27,29 @@ This will automatically:
 - ✅ Install all dependencies
 - ✅ Start both backend (port 8000) and frontend (port 5173) in separate windows
 
-### Option 2: Using npm (Alternative)
+### Option 2: Using npm (Single Window - All Platforms)
 
 ```bash
 # Install concurrently package (first time only)
 npm install
 
-# Run both servers
+# Run both servers in one terminal
 npm run dev
 
 # Or install all dependencies first
 npm run install-all
 npm run dev
+```
+
+**Alternative for Mac/Linux (Single Window):**
+```bash
+chmod +x start-dev-single.sh
+./start-dev-single.sh
+```
+
+**Alternative for Windows (Single Window):**
+```powershell
+.\start-dev-single.ps1
 ```
 
 ### Option 3: Manual Start
