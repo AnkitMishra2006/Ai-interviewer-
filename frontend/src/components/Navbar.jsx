@@ -21,11 +21,23 @@ const Navbar = () => {
     }
   };
 
+  // Check if we're on the landing page (only show features/pricing there)
+  const isLandingPage = location.pathname === '/' && !user;
+  
+  // Check if user is a recruiter
+  const isRecruiter = user?.role === 'recruiter';
+  
+  // Get the appropriate dashboard link based on role
+  const getDashboardLink = () => {
+    if (!user) return '/dashboard';
+    return isRecruiter ? '/recruiter' : '/dashboard';
+  };
+
   return (
     <nav className="fixed top-0 inset-x-0 z-40 backdrop-blur bg-white/80 border-b">
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to={user ? getDashboardLink() : '/'} className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white">
               <Sparkles className="h-4 w-4" />
             </span>
@@ -36,20 +48,40 @@ const Navbar = () => {
         </div>
 
         <div className="hidden md:flex items-center gap-6">
-          <a href="/#features" className="text-sm font-medium text-gray-700 hover:text-gray-900">Features</a>
-          <a href="/#how-it-works" className="text-sm font-medium text-gray-700 hover:text-gray-900">How It Works</a>
-          <a href="/#pricing" className="text-sm font-medium text-gray-700 hover:text-gray-900">Pricing</a>
+          {/* Only show these links on landing page for non-authenticated users */}
+          {isLandingPage && (
+            <>
+              <a href="/#features" className="text-sm font-medium text-gray-700 hover:text-gray-900">Features</a>
+              <a href="/#how-it-works" className="text-sm font-medium text-gray-700 hover:text-gray-900">How It Works</a>
+              <a href="/#pricing" className="text-sm font-medium text-gray-700 hover:text-gray-900">Pricing</a>
+            </>
+          )}
+          
+          {/* Show dashboard navigation links for authenticated users */}
+          {user && (
+            <>
+              <Link to={getDashboardLink()} className="text-sm font-medium text-gray-700 hover:text-gray-900">
+                Dashboard
+              </Link>
+              {isRecruiter && (
+                <>
+                  <Link to="/recruiter/analytics" className="text-sm font-medium text-gray-700 hover:text-gray-900">
+                    Analytics
+                  </Link>
+                </>
+              )}
+              {!isRecruiter && (
+                <Link to="/upload-resume" className="text-sm font-medium text-gray-700 hover:text-gray-900">
+                  Upload Resume
+                </Link>
+              )}
+            </>
+          )}
         </div>
 
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
-              <Link
-                to="/dashboard"
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm font-semibold transition-colors duration-200 hover:bg-gray-50 inline-flex items-center gap-2"
-              >
-                <LayoutDashboard className="h-4 w-4" /> Dashboard
-              </Link>
               <div className="hidden lg:block text-sm text-gray-700">{user.email}</div>
               <button
                 onClick={handleLogout}
@@ -92,19 +124,37 @@ const Navbar = () => {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white/95 backdrop-blur">
           <div className="px-4 py-4 space-y-4">
-            <a href="/#features" className="block text-sm font-medium text-gray-700">Features</a>
-            <a href="/#how-it-works" className="block text-sm font-medium text-gray-700">How It Works</a>
-            <a href="/#pricing" className="block text-sm font-medium text-gray-700">Pricing</a>
+            {/* Only show these links on landing page for non-authenticated users */}
+            {isLandingPage && (
+              <>
+                <a href="/#features" className="block text-sm font-medium text-gray-700">Features</a>
+                <a href="/#how-it-works" className="block text-sm font-medium text-gray-700">How It Works</a>
+                <a href="/#pricing" className="block text-sm font-medium text-gray-700">Pricing</a>
+              </>
+            )}
+            
+            {/* Show dashboard navigation links for authenticated users */}
+            {user && (
+              <>
+                <Link to={getDashboardLink()} onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700">
+                  Dashboard
+                </Link>
+                {isRecruiter && (
+                  <Link to="/recruiter/analytics" onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700">
+                    Analytics
+                  </Link>
+                )}
+                {!isRecruiter && (
+                  <Link to="/upload-resume" onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700">
+                    Upload Resume
+                  </Link>
+                )}
+              </>
+            )}
+            
             <div className="pt-2 border-t flex items-center gap-3">
               {user ? (
                 <>
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex-1 text-center px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm font-semibold"
-                  >
-                    <span className="inline-flex items-center gap-2 justify-center"><LayoutDashboard className="h-4 w-4" /> Dashboard</span>
-                  </Link>
                   <button
                     onClick={async () => { await handleLogout(); setMobileOpen(false); }}
                     className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold"
