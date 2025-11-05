@@ -2,12 +2,11 @@
 Models package - Pydantic data models
 """
 from .user import (
-    User,
     UserCreate,
     UserLogin,
     UserResponse,
-    CandidateProfile,
-    RecruiterProfile
+    UserInDB,
+    CandidateProfile
 )
 from .interview import (
     InterviewSession,
@@ -23,12 +22,11 @@ from .response import (
 )
 
 __all__ = [
-    "User",
     "UserCreate",
     "UserLogin",
     "UserResponse",
+    "UserInDB",
     "CandidateProfile",
-    "RecruiterProfile",
     "InterviewSession",
     "InterviewCreate",
     "InterviewResponse",
