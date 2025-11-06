@@ -1,105 +1,364 @@
+"""
+Resume Parser Service - Extract information from PDF and DOCX files using LLM
+"""
 import PyPDF2
-import spacy
+import docx
 import re
-import google.generativeai as genai
+from typing import Dict, List, Optional
+from pathlib import Path
+import json
+from groq import Groq
+from config import settings
+
 
 class ResumeParser:
-    def __init__(self):
-        try:
-            self.nlp = spacy.load("en_core_web_sm")
-        except:
-            import os
-            os.system("python -m spacy download en_core_web_sm")
-            self.nlp = spacy.load("en_core_web_sm")
-        
-        self.model = genai.GenerativeModel('gemini-pro')
+    """Parse resumes and extract structured information using Groq LLM"""
     
-    def extract_text_from_pdf(self, pdf_path):
+    def __init__(self):
+        """Initialize Groq client for LLM-based parsing"""
+        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        # Using llama-3.3-70b-versatile - Latest high-performance model
+        # Alternative: "llama-3.1-70b-versatile" or "gemma2-9b-it"
+        self.model = "llama-3.3-70b-versatile"
+    
+    def extract_text_from_pdf(self, file_path: str) -> str:
         """Extract text from PDF file"""
         text = ""
         try:
-            with open(pdf_path, 'rb') as file:
+            with open(file_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 for page in pdf_reader.pages:
-                    text += page.extract_text()
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
         except Exception as e:
             print(f"Error extracting PDF: {e}")
         return text
     
-    def extract_email(self, text):
-        """Extract email using regex"""
+    def extract_text_from_docx(self, file_path: str) -> str:
+        """Extract text from DOCX file"""
+        text = ""
+        try:
+            doc = docx.Document(file_path)
+            for paragraph in doc.paragraphs:
+                text += paragraph.text + "\n"
+        except Exception as e:
+            print(f"Error extracting DOCX: {e}")
+        return text
+    
+    def extract_text(self, file_path: str) -> str:
+        """Extract text based on file extension with enhanced methods"""
+        file_ext = Path(file_path).suffix.lower()
+        if file_ext == '.pdf':
+            # Try enhanced extraction first
+            text = self.extract_text_from_pdf_enhanced(file_path)
+            if not text or len(text.strip()) < 50:
+                # Fallback to basic extraction
+                print("⚠️ Enhanced extraction failed, using basic method")
+                text = self.extract_text_from_pdf(file_path)
+            return text
+        elif file_ext in ['.docx', '.doc']:
+            return self.extract_text_from_docx(file_path)
+        else:
+            return ""
+    
+    def extract_basic_info_with_regex(self, text: str) -> Dict[str, Optional[str]]:
+        """Extract basic contact info using regex (fast and reliable)"""
+        # Email extraction
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         emails = re.findall(email_pattern, text)
-        return emails[0] if emails else ""
-    
-    def extract_phone(self, text):
-        """Extract phone number"""
-        phone_pattern = r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-        phones = re.findall(phone_pattern, text)
-        return phones[0] if phones else ""
-    
-    def extract_skills_with_gemini(self, text):
-        """Use Gemini to extract skills"""
-        prompt = f"""
-        Extract all technical skills, programming languages, frameworks, and tools 
-        mentioned in this resume. Return as a comma-separated list.
+        email = emails[0] if emails else None
         
-        Resume text:
-        {text[:3000]}
-        """
-        
-        response = self.model.generate_content(prompt)
-        skills = response.text.strip().split(',')
-        return [skill.strip() for skill in skills if skill.strip()]
-    
-    def extract_experience_with_gemini(self, text):
-        """Use Gemini to extract work experience"""
-        prompt = f"""
-        Extract work experience from this resume. For each job, provide:
-        - Company name
-        - Job title
-        - Duration
-        - Key responsibilities (2-3 points)
-        
-        Format as JSON array.
-        
-        Resume text:
-        {text[:3000]}
-        """
-        
-        response = self.model.generate_content(prompt)
-        try:
-            import json
-            experience = json.loads(response.text)
-        except:
-            experience = [{"raw": response.text}]
-        
-        return experience
-    
-    def parse(self, pdf_path):
-        """Main parsing function"""
-        text = self.extract_text_from_pdf(pdf_path)
-        doc = self.nlp(text)
-        
-        # Extract name (usually first PERSON entity)
-        name = ""
-        for ent in doc.ents:
-            if ent.label_ == "PERSON":
-                name = ent.text
+        # Phone extraction
+        phone_patterns = [
+            r'\+?1?\s*\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})',
+            r'\+?\d{1,3}[\s.-]?\d{3,4}[\s.-]?\d{4}',
+            r'\(\d{3}\)\s*\d{3}[-.]?\d{4}'
+        ]
+        phone = None
+        for pattern in phone_patterns:
+            phones = re.findall(pattern, text)
+            if phones:
+                phone = str(phones[0]) if isinstance(phones[0], str) else '-'.join(phones[0])
                 break
         
-        # Extract other information
-        email = self.extract_email(text)
-        phone = self.extract_phone(text)
-        skills = self.extract_skills_with_gemini(text)
-        experience = self.extract_experience_with_gemini(text)
+        # LinkedIn extraction
+        linkedin_pattern = r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+'
+        linkedin_match = re.search(linkedin_pattern, text, re.IGNORECASE)
+        linkedin = linkedin_match.group(0) if linkedin_match else None
+        
+        # GitHub extraction
+        github_pattern = r'(?:https?://)?(?:www\.)?github\.com/[\w-]+'
+        github_match = re.search(github_pattern, text, re.IGNORECASE)
+        github = github_match.group(0) if github_match else None
         
         return {
-            "name": name or "Unknown Candidate",
-            "email": email,
-            "phone": phone,
-            "skills": skills,
-            "experience": experience,
-            "education": [],
-            "raw_text": text
+            'email': email,
+            'phone': phone,
+            'linkedin': linkedin,
+            'github': github
         }
+    
+    def extract_text_from_pdf_enhanced(self, file_path: str) -> str:
+        """
+        Enhanced PDF text extraction with better handling
+        Extracts text page by page and preserves structure
+        """
+        text = ""
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += f"\n--- Page {page_num} ---\n"
+                        text += page_text + "\n"
+            print(f"✅ Extracted {len(text)} characters from PDF using pdfplumber")
+        except ImportError:
+            print("⚠️ pdfplumber not available, falling back to PyPDF2")
+            # Fallback to PyPDF2
+            try:
+                with open(file_path, 'rb') as file:
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    for page_num, page in enumerate(pdf_reader.pages, 1):
+                        page_text = page.extract_text()
+                        if page_text:
+                            text += f"\n--- Page {page_num} ---\n"
+                            text += page_text + "\n"
+                print(f"✅ Extracted {len(text)} characters from PDF using PyPDF2")
+            except Exception as e:
+                print(f"❌ Error extracting PDF: {e}")
+        except Exception as e:
+            print(f"❌ Error with pdfplumber: {e}")
+        
+        return text
+    
+    def extract_info_with_llm(self, text: str) -> Dict:
+        """
+        Use Groq LLM to intelligently extract structured information from resume
+        Enhanced with better prompting and error handling
+        """
+        if not text or len(text.strip()) < 50:
+            print("⚠️ Text too short for LLM extraction")
+            return self._get_empty_structure()
+        
+        # Use more text for better context (up to 12000 chars)
+        resume_text = text[:12000] if len(text) > 12000 else text
+        
+        print(f"📝 Sending {len(resume_text)} characters to Groq LLM...")
+        
+        prompt = f"""You are an expert resume parser. Carefully analyze the following resume and extract ALL information accurately.
+
+RESUME TEXT:
+{resume_text}
+
+Extract and return a JSON object with this EXACT structure:
+
+{{
+    "name": "candidate's full name (extract from top of resume)",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience": [
+        {{
+            "title": "job title",
+            "company": "company name",
+            "duration": "date range",
+            "description": "what they did in this role"
+        }}
+    ],
+    "education": [
+        {{
+            "degree": "degree name (e.g., B.Tech in Computer Science)",
+            "institution": "university/college name",
+            "year": "graduation year or period",
+            "grade": "GPA/CGPA if mentioned"
+        }}
+    ],
+    "certifications": ["cert1", "cert2", ...],
+    "summary": "write a professional 2-3 sentence summary highlighting their key strengths and experience"
+}}
+
+CRITICAL INSTRUCTIONS:
+1. Extract the candidate's ACTUAL NAME from the resume (usually at the top)
+2. Extract ALL technical skills: programming languages, frameworks, libraries, tools, databases, cloud platforms, methodologies
+3. Extract ALL work experiences with complete details
+4. Extract ALL education entries
+5. Extract any certifications or courses mentioned
+6. If information is not found, use empty array [] or null
+7. Return ONLY the JSON object, no markdown formatting, no explanations
+8. Ensure the JSON is valid and properly formatted"""
+
+        try:
+            print("🤖 Calling Groq API...")
+            
+            # Call Groq API with retry logic
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a professional resume parser. Return only valid JSON with no markdown formatting."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        temperature=0.1,  # Low temperature for consistent extraction
+                        max_tokens=3000,  # Increased for comprehensive extraction
+                        top_p=1,
+                        stream=False
+                    )
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ API call failed (attempt {attempt + 1}), retrying... Error: {e}")
+                        continue
+                    else:
+                        raise
+            
+            # Extract JSON from response
+            response_text = response.choices[0].message.content.strip()
+            
+            print(f"📥 Received response ({len(response_text)} chars)")
+            print(f"📄 First 200 chars of response: {response_text[:200]}")
+            
+            # Clean up response text
+            # Remove markdown code blocks if present
+            if '```' in response_text:
+                # Extract content between code blocks
+                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1)
+                else:
+                    # Try to remove just the markers
+                    response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
+                    response_text = re.sub(r'\s*```$', '', response_text)
+            
+            # Remove any leading/trailing whitespace
+            response_text = response_text.strip()
+            
+            # Parse JSON
+            print("🔍 Parsing JSON response...")
+            extracted_data = json.loads(response_text)
+            
+            # Validate extracted data
+            if not isinstance(extracted_data, dict):
+                print(f"⚠️ Response is not a dict: {type(extracted_data)}")
+                return self._get_empty_structure()
+            
+            # Ensure all required keys exist
+            required_keys = ['name', 'skills', 'experience', 'education', 'certifications', 'summary']
+            for key in required_keys:
+                if key not in extracted_data:
+                    extracted_data[key] = [] if key in ['skills', 'experience', 'education', 'certifications'] else None
+            
+            # Log success
+            print(f"✅ LLM extraction successful!")
+            print(f"   📛 Name: {extracted_data.get('name')}")
+            print(f"   ⚡ Skills: {len(extracted_data.get('skills', []))} found")
+            print(f"   💼 Experience: {len(extracted_data.get('experience', []))} positions")
+            print(f"   🎓 Education: {len(extracted_data.get('education', []))} entries")
+            print(f"   📜 Certifications: {len(extracted_data.get('certifications', []))} found")
+            
+            return extracted_data
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parse error: {e}")
+            print(f"📄 Raw response (first 500 chars):")
+            print(response_text[:500] if 'response_text' in locals() else "No response")
+            return self._get_empty_structure()
+            
+        except Exception as e:
+            print(f"❌ LLM extraction error: {type(e).__name__}: {e}")
+            import traceback
+            print(f"📍 Traceback: {traceback.format_exc()}")
+            return self._get_empty_structure()
+    
+    def _get_empty_structure(self) -> Dict:
+        """Return empty data structure"""
+        return {
+            "name": None,
+            "skills": [],
+            "experience": [],
+            "education": [],
+            "certifications": [],
+            "summary": None
+        }
+    
+    def parse(self, file_path: str) -> Dict:
+        """
+        Main parsing function - extract all information from resume using LLM
+        
+        This method:
+        1. Extracts text from PDF/DOCX
+        2. Uses regex for contact info (fast & reliable)
+        3. Uses Groq LLM for intelligent extraction of skills, experience, education
+        
+        Why this hybrid approach?
+        - Regex: Perfect for structured data like email, phone, URLs
+        - LLM: Much better for understanding context, extracting skills, summarizing
+        """
+        print(f"📄 Parsing resume: {file_path}")
+        
+        # Step 1: Extract text from file
+        text = self.extract_text(file_path)
+        
+        if not text or len(text.strip()) < 50:
+            print("⚠️ Resume text is too short or empty")
+            return {
+                "name": "Unknown",
+                "email": None,
+                "phone": None,
+                "skills": [],
+                "experience": [],
+                "education": [],
+                "certifications": [],
+                "summary": None,
+                "linkedin": None,
+                "github": None,
+                "portfolio": None,
+                "raw_text": ""
+            }
+        
+        print(f"✅ Extracted {len(text)} characters from resume")
+        print(f"📄 Text preview (first 300 chars):\n{text[:300]}...\n")
+        
+        # Step 2: Extract contact info using regex (fast and reliable)
+        print("📧 Extracting contact information with regex...")
+        basic_info = self.extract_basic_info_with_regex(text)
+        print(f"   ✉️  Email: {basic_info.get('email')}")
+        print(f"   📱 Phone: {basic_info.get('phone')}")
+        print(f"   🔗 LinkedIn: {basic_info.get('linkedin')}")
+        print(f"   🔗 GitHub: {basic_info.get('github')}")
+        
+        # Step 3: Extract structured data using LLM (intelligent parsing)
+        print("\n🤖 Extracting structured data with Groq LLM...")
+        llm_data = self.extract_info_with_llm(text)
+        
+        # Step 4: Combine results
+        result = {
+            "name": llm_data.get("name") or "Candidate",
+            "email": basic_info["email"],
+            "phone": basic_info["phone"],
+            "skills": llm_data.get("skills", []),
+            "experience": llm_data.get("experience", []),
+            "education": llm_data.get("education", []),
+            "certifications": llm_data.get("certifications", []),
+            "summary": llm_data.get("summary"),
+            "linkedin": basic_info["linkedin"],
+            "github": basic_info["github"],
+            "portfolio": None,
+            "raw_text": text[:5000]  # Limit to first 5000 chars
+        }
+        
+        print(f"✅ Parsing complete! Found: {len(result['skills'])} skills, "
+              f"{len(result['experience'])} experiences, {len(result['education'])} education entries")
+        
+        return result
+
+
+# Singleton instance
+resume_parser = ResumeParser()
